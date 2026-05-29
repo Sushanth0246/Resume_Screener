@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 
@@ -16,6 +17,15 @@ _SYSTEM_PROMPT = (
     '"skill_gaps" (list of missing skills). '
     "Return ONLY valid JSON, no markdown."
 )
+
+
+def _parse_llm_json(raw: str) -> dict:
+    """Robustly parse JSON from LLM output, stripping markdown fences if present."""
+    raw = raw.strip()
+    # Strip ```json ... ``` or ``` ... ``` fences that LLMs sometimes add despite instructions
+    raw = re.sub(r"^```(?:json)?\s*", "", raw)
+    raw = re.sub(r"\s*```$", "", raw)
+    return json.loads(raw.strip())
 
 
 class ScoringService:
@@ -49,7 +59,7 @@ class ScoringService:
         ]
         response = self._llm.invoke(messages)
         raw = response.content or "{}"
-        data = json.loads(raw)
+        data = _parse_llm_json(raw)
         return CandidateResult(**data)
 
     async def aexplain_match(
@@ -69,5 +79,5 @@ class ScoringService:
         ]
         response = await self._llm.ainvoke(messages)
         raw = response.content or "{}"
-        data = json.loads(raw)
+        data = _parse_llm_json(raw)
         return CandidateResult(**data)
